@@ -71,10 +71,9 @@ def Normalize(ts):
 #	return eiList
 
 # Build epsilon indexed list of components based on normalizing
-def BuildEIList(ts):
+def BuildEIList(ts,step):
 	newts,minVal,maxVal = Normalize(ts)
 	eiList = []
-	step = 0.01
 	epsilon = 0
 	while epsilon <= 0.55:
 		eiList.append(BuildCompList(newts,epsilon))
@@ -124,8 +123,8 @@ def MinMaxLabel(eiList,ts):
 	return minList,maxList
 
 # Return component-chain list indexed by time and a labeled(min/max/n/a) chain list
-def BuildChains(eiList,ts):
-	minList,maxList = MinMaxLabel(BuildEIList(ts),ts)
+def BuildChains(eiList,ts,step):
+	minList,maxList = MinMaxLabel(BuildEIList(ts,step),ts)
 	chainList = []
 	labeledChains = []
 	for i in range(0,len(eiList[0])):
@@ -176,7 +175,7 @@ def DeepLife(minLife,maxLife):
 	return deepMin,deepMax
 
 # Given a min and max, find the maximum epsilon where their components are disjoint
-def FindStep(eiList, minTime, maxTime):
+def FindEps(eiList, minTime, maxTime):
 	for ndx in range(0,len(eiList)):
 		if len(set(eiList[ndx][minTime]).intersection(eiList[ndx][maxTime])) == 0:
 			step = ndx
@@ -187,22 +186,22 @@ def FindStep(eiList, minTime, maxTime):
 # eiList = epsilon-indexed list of components, min/maxTime = time of chosen min/max, step = highest step of epsilon at which
 # the min component and max component are disjoint
 # param specifies how the min/max are chosen: 0 = deepest, 1 = first
-def ProcessTS(tsList, param):
+def ProcessTS(tsList, param, step):
 	sumList = []
 	for ts in tsList:
-		eiList = BuildEIList(ts)
-		chainList, labeledChains = BuildChains(eiList, ts)
+		eiList = BuildEIList(ts,step)
+		chainList, labeledChains = BuildChains(eiList,ts,step)
 		minLife,maxLife = EpsLife(labeledChains)
 		if param == 0:
 			minTime,maxTime = DeepLife(minLife,maxLife)
 #		elif param == 1:
 #			minTime,maxTime = FirstLife(minLife,maxLife)
-		step = FindStep(eiList,minTime,maxTime)
-		sumList.append([eiList,minTime,maxTime,step])
+		eps = FindEps(eiList,minTime,maxTime)
+		sumList.append([eiList,minTime,maxTime,eps])
 	return sumList
 
 # Find the minimum of all steps from each ts
-def FindEps(sumList):
+def FindMaxEps(sumList):
 	eps = sumList[0][3]
 	for ts in sumList:
 		if ts[3] < eps:
@@ -210,29 +209,30 @@ def FindEps(sumList):
 	return eps
 
 # For each ts, pull min/max components for each step up to eps indexed by ts then step
-def PullMinMaxComps(sumList,eps):
+def PullMinMaxComps(sumList,maxEps,step):
 	minMaxCompList = []
 	ndx = 0
 	for tsList in sumList:
 		minMaxCompList.append([])
-		for step in range(0,eps+1):
-			minMaxCompList[ndx].append([tsList[0][step][tsList[1]],tsList[0][step][tsList[2]]])
+		for eps in range(0,maxEps+1):
+			minMaxCompList[ndx].append([tsList[0][eps][tsList[1]],tsList[0][eps][tsList[2]]])
 		ndx += 1
 	return minMaxCompList
 
 # Build partial order list indexed by epsilon. Each PO is a list indexed by 1st ts min, 1st ts max, ..., last ts min, last ts max
 # Each entry is a list of all mins/maxes that occur before the given min/max. 
-def BuildPO(minMaxCompList, eps):
+def BuildPO(minMaxCompList,maxEps,step):
+	maxStep = maxEps
 	POsumList = []
-	for step in range(0,eps+1):
+	for eps in range(0,maxStep+1):
 		PO = []
 		for ts in range(0,len(minMaxCompList)):
 			for exType in range(0,2):
 				PO.append([])
 				for ndx in range(0,len(minMaxCompList)):
 					for ndx1 in range(0,2):
-						fixed = minMaxCompList[ts][step][exType]
-						checker = minMaxCompList[ndx][step][ndx1]
+						fixed = minMaxCompList[ts][eps][exType]
+						checker = minMaxCompList[ndx][eps][ndx1]
 						intSize = len(set(fixed).intersection(checker))
 						if intSize == 0: #intSize < 2
 #							if (intSize == 1 and len(fixed) > 1 and len(checker) > 1) or intSize == 0:
@@ -260,7 +260,7 @@ def ParseFile(fileName):
 		TSData.append([])
 	for line in f:
 		lineList = line.split()
-		for ndx in range(0,7-1): #range(0,len(lineList)-1):
+		for ndx in range(0,6): #range(0,len(lineList)-1):
 			TSData[ndx].append(float(lineList[ndx+1]))
 	f.close()
 	return TSData
@@ -278,11 +278,10 @@ def PlotPercent(percentPOList,step):
 def main():
 	step = 0.01
 	tsList = ParseFile('SampleData.tsv')
-	sumList = ProcessTS(tsList,0)
-	eps = FindEps(sumList)
-	minMaxCompList = PullMinMaxComps(sumList,eps)
-	#print(minMaxCompList)
-	POsumList = BuildPO(minMaxCompList,eps)
+	sumList = ProcessTS(tsList,0,step)
+	maxEps = FindMaxEps(sumList)
+	minMaxCompList = PullMinMaxComps(sumList,maxEps,step)
+	POsumList = BuildPO(minMaxCompList,maxEps,step)
 	percentPOList = ConvertPOsumList(POsumList)
 	PlotPercent(percentPOList,step)
 
