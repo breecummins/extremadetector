@@ -1,5 +1,7 @@
 
 import matplotlib.pyplot as plt
+from numpy import matrix,copy
+from graphviz import Digraph
 
 # For a given time, check to see if epsilon nbhd of next time steps image intersects
 # epsilon nbhd of time's image. If so, add to time's component list and check next time, etc.
@@ -253,18 +255,27 @@ def ConvertPOsumList(POsumList):
 		percentPOList.append(round(count/countTO,4))
 	return percentPOList
 
+# Parse RawData.tsv file output list of TS and list of TS labels
 def ParseFile(fileName):
 	f = open(fileName)
 	TSData = []
-	for ndx in range(0,6): #range(0,len(lineList)-1):
+	for ndx in range(0,43):
 		TSData.append([])
+	lineNDX = 0
+	TSLabels = []
 	for line in f:
 		lineList = line.split()
-		for ndx in range(0,6): #range(0,len(lineList)-1):
-			TSData[ndx].append(float(lineList[ndx+1]))
+		if lineNDX == 5:
+			for ndx in range(0,len(lineList)-1):
+				TSLabels.append(lineList[ndx+1])
+		elif lineNDX >= 6:
+			for ndx in range(0,len(lineList)-1):
+				TSData[ndx].append(float(lineList[ndx+1]))
+		lineNDX += 1
 	f.close()
-	return TSData
+	return TSData,TSLabels
 
+# Plot the percent of total order vs epsilon
 def PlotPercent(percentPOList,step):
 	epsList = []
 	for ndx in range(0,len(percentPOList)):
@@ -275,14 +286,88 @@ def PlotPercent(percentPOList,step):
 	plt.xlabel('epsilon')
 	plt.show()
 
+# Pick off a few time series, specifically TS 3,4,12,15,17,18
+def PickTS(TSList,chosenTS,TSLabels):
+	newTSList = []
+	newTSLabels = []
+	ndx = 0
+	for ts in TSList:
+		if ndx in chosenTS:
+			newTSList.append(TSList[ndx])
+			newTSLabels.append(TSLabels[ndx])
+		ndx += 1
+	return newTSList,newTSLabels
+
+# Convert each PO in POsumList into matrix
+def ConvertPO(POsumList):
+	matrixPOsumList = []
+	for PO in POsumList:
+		POmatrixList = []
+		for ndx in range(0,len(PO)):
+			POmatrixList.append([])
+			for ndx1 in range(0,len(PO)):
+				if ndx1 in PO[ndx]:
+					POmatrixList[ndx].append(1)
+				else:
+					POmatrixList[ndx].append(0)
+		matrixPOsumList.append(matrix(POmatrixList))
+	return matrixPOsumList
+
+# Reduce each PO matrix as much as posible. i.e. take transitivity into account
+# For graphing
+def ReducePOmatrix(matrixPOsumList):
+	reducedSumList = []
+	for PO in matrixPOsumList:
+		mPO = matrix(copy(PO))
+		colSum = sum(mPO)
+		for col in range(0,mPO.shape[1]):
+			if colSum[0,col] > 1:
+				for row in range(0,mPO.shape[0]):
+					if mPO[row,col] == 1:
+						for row2 in range(0,mPO.shape[0]):
+							if mPO[row2,row] == 1:
+								mPO[row2,col] = 0
+		reducedSumList.append(mPO)
+	return reducedSumList
+
+# Print Partial Orders
+def GraphPO(reducedSumList,TSLabels):
+	graphNum = 0
+	for PO in reducedSumList:
+		graph = Digraph(comment = graphNum)
+		for value in range(0,PO.shape[0]):
+			if value%2 == 0:
+				label = ' min'
+			else:
+				label = ' max'
+			graph.node(str(value),TSLabels[value/2] + label)
+		for row in range(0,PO.shape[0]):
+			for col in range(0,PO.shape[0]):
+				if PO[row,col] == 1:
+					graph.edge(str(col),str(row))
+		graph.render('graph'+str(graphNum)+'.gv',view=True)
+		graphNum += 1
+
+
 def main():
-	step = 0.01
-	tsList = ParseFile('SampleData.tsv')
-	sumList = ProcessTS(tsList,0,step)
+	step = 0.05
+	chosenTS = [2,3,11,14,16,17]
+	param = 0
+
+	TSList = ParseFile('RawData.tsv')[0]
+	TSLabels = ParseFile('RawData.tsv')[1]
+	newTSList,newTSLabels = PickTS(TSList,chosenTS,TSLabels)
+	sumList = ProcessTS(newTSList,param,step)
 	maxEps = FindMaxEps(sumList)
 	minMaxCompList = PullMinMaxComps(sumList,maxEps,step)
 	POsumList = BuildPO(minMaxCompList,maxEps,step)
 	percentPOList = ConvertPOsumList(POsumList)
-	PlotPercent(percentPOList,step)
+	matrixPOsumList = ConvertPO(POsumList)
+	reducedSumList = ReducePOmatrix(matrixPOsumList)
+	print(reducedSumList)
+	#PlotPercent(percentPOList,step)
+	#reducedSumList = ReducePOmatrix([matrix([[0,1,1,1],[0,0,1,1],[0,0,0,1],[0,0,0,0]])])
+	#TSLabels = ['A','B']
+	GraphPO(reducedSumList,TSLabels)
 
 main()
