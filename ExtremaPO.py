@@ -2,6 +2,7 @@
 import matplotlib.pyplot as plt
 from numpy import matrix,copy
 from graphviz import Digraph
+from PIL import Image
 
 # For a given time, check to see if epsilon nbhd of next time steps image intersects
 # epsilon nbhd of time's image. If so, add to time's component list and check next time, etc.
@@ -284,7 +285,8 @@ def PlotPercent(percentPOList,step):
 	plt.axis([0, 0.6, 0, 1])
 	plt.ylabel('percent of linear order')
 	plt.xlabel('epsilon')
-	plt.show()
+	plt.savefig('percentPlot.png')
+	f = Image.open("percentPlot.png").show()
 
 # Pick off a few time series, specifically TS 3,4,12,15,17,18
 def PickTS(TSList,chosenTS,TSLabels):
@@ -364,10 +366,15 @@ def main():
 	percentPOList = ConvertPOsumList(POsumList)
 	matrixPOsumList = ConvertPO(POsumList)
 	reducedSumList = ReducePOmatrix(matrixPOsumList)
-	print(reducedSumList)
-	#PlotPercent(percentPOList,step)
-	#reducedSumList = ReducePOmatrix([matrix([[0,1,1,1],[0,0,1,1],[0,0,0,1],[0,0,0,0]])])
-	#TSLabels = ['A','B']
-	GraphPO(reducedSumList,TSLabels)
+
+	PlotPercent(percentPOList,step)
+	start = raw_input('To plot partial orders, enter starting epsilon, else enter x:\n')
+	if not(start=='x'):
+		end = input('Enter ending epsilon:\n')
+		newSumList = []
+		for ndx in range(int(start),int(end+1)):
+			newSumList.append(reducedSumList[ndx])
+		GraphPO(newSumList,TSLabels)
+	
 
 main()
