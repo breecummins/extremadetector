@@ -1,11 +1,14 @@
 
+import sys
 import matplotlib.pyplot as plt
 from numpy import matrix,copy
 from graphviz import Digraph
 from PIL import Image
 
-# For a given time, check to see if epsilon nbhd of next time steps image intersects
-# epsilon nbhd of time's image. If so, add to time's component list and check next time, etc.
+# For a given time, check to see if epsilon nbhd of next time's value intersects
+# epsilon nbhd of current time's value and also intersects epsilon nbhd of each time value that is in the component.
+# If so, add to time's component list and check the next time, etc.
+# Inputs: t = time, ts = time series, epsilon, compList = list of components indexed by time
 def ForwardCheck(t,ts,epsilon,compList):
 	if t < len(ts)-1:
 		next = t+1
@@ -21,8 +24,10 @@ def ForwardCheck(t,ts,epsilon,compList):
 				return
 			next += 1
 
-# For a given time, check to see if epsilon nbhd of prev time steps image intersects
-# epsilon nbhd of time's image. If so, add to time's component list and check prev time, etc.
+# For a given time, check to see if epsilon nbhd of prev time's value intersects
+# epsilon nbhd of current time's value and also intersects epsilon nbhd of each time value that is in the component. 
+# If so, add to time's component list and check the prev time, etc.
+# Inputs: t = time, ts = time series, epsilon, compList = list of components indexed by time
 def ReverseCheck(t,ts,epsilon,compList):
 	if t > 0:
 		prev = t-1
@@ -39,6 +44,8 @@ def ReverseCheck(t,ts,epsilon,compList):
 			prev -= 1
 
 # For a given epsilon, build component list for each t
+# Inputs: ts = time series, epsilon
+# Outputs: compList = list of components indexed by time
 def BuildCompList(ts,epsilon):
 	compList = []
 	for t in range(0,len(ts)):
@@ -47,7 +54,9 @@ def BuildCompList(ts,epsilon):
 		ReverseCheck(t,ts,epsilon,compList)
 	return compList
 
-	# Normalize time series and find min/max
+# Normalize time series and find global min/max
+# Inputs: ts
+# Outputs: newts = normalized time series, minVal = global min, maxVal = global max
 def Normalize(ts):
 	maxVal = ts[0]
 	minVal = ts[0]
@@ -62,18 +71,9 @@ def Normalize(ts):
 		newts.append(newValue)
 	return newts,minVal,maxVal
 
-# Build epsilon indexed list of components based on percent of max-min
-#def BuildEIList(ts):
-#	newts,minVal,maxVal = Normalize(ts)
-#	eiList = []
-#	step = 0.05*(abs(maxVal-minVal))
-#	epsilon = 0
-#	while epsilon <= 0.55*(maxVal-minVal):
-#		eiList.append(BuildCompList(ts,epsilon))
-#		epsilon += step
-#	return eiList
-
-# Build epsilon indexed list of components based on normalizing
+# Build epsilon indexed list whose entries are lists of components generated at that epsilon
+# Inputs: ts = time series, step = user defined parameter that specifies the increase in epsilon 
+# Outputs: eiList = epsilon indexed list
 def BuildEIList(ts,step):
 	newts,minVal,maxVal = Normalize(ts)
 	eiList = []
@@ -90,7 +90,7 @@ def Concatenate(list):
 		newList += item
 	return newList
 
-# Uniqify a list
+# Uniqify a list, i.e. turn it into a set
 def Uniqify(inputList):
 	for item1 in inputList:
 		tempList = list(inputList)
@@ -100,7 +100,9 @@ def Uniqify(inputList):
 				inputList.remove(item1)
 	return inputList
 
-# Create a list of min and max components
+# Sorts the unique components grown into two lists, minList and maxList
+# Inputs: eiList, ts
+# Outputs: minList = list containing all components that are minima, maxList = similar
 def MinMaxLabel(eiList,ts):
 	compList = Uniqify(Concatenate(eiList))
 	minList = []
@@ -126,6 +128,9 @@ def MinMaxLabel(eiList,ts):
 	return minList,maxList
 
 # Return component-chain list indexed by time and a labeled(min/max/n/a) chain list
+# Creates list indexed by time where each entry is an epsilon indexed list of components grown at that
+# time. This is called chainList. Then I assign each component a label, 'min'/'max'/'n/a' and record
+# this as labeledChains.
 def BuildChains(eiList,ts,step):
 	minList,maxList = MinMaxLabel(BuildEIList(ts,step),ts)
 	chainList = []
@@ -146,7 +151,10 @@ def BuildChains(eiList,ts,step):
 			ndx+=1
 	return chainList,labeledChains
 
-# Count epsilon-life of mins/maxes and return list of min/max lifetimes
+# Count number of epsilon steps that mins/maxes persisted and return list of min/max lifetimes.
+# Note, only considers those that are local mins/maxes at epsilon = 0. 
+# Outputs: minLife = time indexed list initialized to all 0's, time's entry is # of consecutive 
+# epsilon steps that time was a min, maxLife = similar
 def EpsLife(labeledChains):
 	minLife = [0] * len(labeledChains)
 	maxLife = [0] * len(labeledChains)
@@ -163,7 +171,7 @@ def EpsLife(labeledChains):
 				s+=1
 	return minLife,maxLife
 
-# Extract deepest lifetime mins/maxes
+# Extract deepest lifetime min and max
 def DeepLife(minLife,maxLife):
 	value = 0
 	for t in range(0,len(minLife)):
@@ -177,18 +185,18 @@ def DeepLife(minLife,maxLife):
 			value = maxLife[t]
 	return deepMin,deepMax
 
-# Given a min and max, find the maximum epsilon where their components are disjoint
+# Given a min and max, find the maximum epsilon step where their components are disjoint
 def FindEps(eiList, minTime, maxTime):
 	for ndx in range(0,len(eiList)):
 		if len(set(eiList[ndx][minTime]).intersection(eiList[ndx][maxTime])) == 0:
-			step = ndx
-	return step
+			eps = ndx
+	return eps
 
 # Process a list of time series and output a list of time series info. Each item in the list will correspond to time series
-# and will be a list of the form [eiList, minTime, maxTime, step]
-# eiList = epsilon-indexed list of components, min/maxTime = time of chosen min/max, step = highest step of epsilon at which
+# and will be a list of the form [eiList, minTime, maxTime, eps]
+# eiList = epsilon-indexed list of components, min/maxTime = time of chosen min/max, eps = highest step of epsilon at which
 # the min component and max component are disjoint
-# param specifies how the min/max are chosen: 0 = deepest, 1 = first
+# param specifies how the min/max are chosen: 0 = deepest, 1 = first (to be implemented)
 def ProcessTS(tsList, param, step):
 	sumList = []
 	for ts in tsList:
@@ -203,15 +211,17 @@ def ProcessTS(tsList, param, step):
 		sumList.append([eiList,minTime,maxTime,eps])
 	return sumList
 
-# Find the minimum of all steps from each ts
+# Find the minimum value of eps such that min/max interval of every time series being processed
+# is disjoint. So take min of all eps
 def FindMaxEps(sumList):
-	eps = sumList[0][3]
+	epsilon = sumList[0][3]
 	for ts in sumList:
-		if ts[3] < eps:
+		if ts[3] < epsilon:
 			eps = ts[3]
 	return eps
 
 # For each ts, pull min/max components for each step up to eps indexed by ts then step
+# min component comes before max component
 def PullMinMaxComps(sumList,maxEps,step):
 	minMaxCompList = []
 	ndx = 0
@@ -245,6 +255,7 @@ def BuildPO(minMaxCompList,maxEps,step):
 	return POsumList
 
 # For each epsilon, for each PO in POsumList, sum number of inequalities in PO and divide by number in total order
+# So find how close it is to a linear order
 def ConvertPOsumList(POsumList):
 	n = len(POsumList[0])
 	countTO = (n*(n-1))/2.0
@@ -255,6 +266,90 @@ def ConvertPOsumList(POsumList):
 			count += len(PO[ndx])
 		percentPOList.append(round(count/countTO,4))
 	return percentPOList
+
+# Plot the percent of total order vs epsilon
+def PlotPercent(percentPOList,step):
+	epsList = []
+	for ndx in range(0,len(percentPOList)):
+		epsList.append(ndx*step)
+	plt.plot(epsList, percentPOList, 'ro')
+	plt.axis([0, 0.6, 0, 1])
+	plt.ylabel('percent of linear order')
+	plt.xlabel('epsilon')
+	plt.savefig('percentPlot.png')
+	f = Image.open("percentPlot.png").show()
+
+# Pick off a few time series if do not want to look at all of them
+def PickTS(TSList,chosenTS,TSLabels):
+	newTSList = []
+	newTSLabels = []
+	ndx = 0
+	for ts in TSList:
+		if ndx in chosenTS:
+			newTSList.append(TSList[ndx])
+			newTSLabels.append(TSLabels[ndx])
+		ndx += 1
+	return newTSList,newTSLabels
+
+# Convert each PO in POsumList into adjacency matrix
+def ConvertPO(POsumList):
+	matrixPOsumList = []
+	for PO in POsumList:
+		POmatrixList = []
+		for ndx in range(0,len(PO)):
+			POmatrixList.append([])
+			for ndx1 in range(0,len(PO)):
+				if ndx1 in PO[ndx]:
+					POmatrixList[ndx].append(1)
+				else:
+					POmatrixList[ndx].append(0)
+		matrixPOsumList.append(matrix(POmatrixList))
+	return matrixPOsumList
+
+# Reduce each PO matrix as much as posible. i.e. transitive reduction
+# For graphing purposes
+def ReducePOmatrix(matrixPOsumList):
+	reducedSumList = []
+	for PO in matrixPOsumList:
+		mPO = matrix(copy(PO))
+		colSum = sum(mPO)
+		for ndx1 in range(0,mPO.shape[0]):
+			if colSum[0,ndx1] > 1:
+				for ndx2 in range(0,mPO.shape[0]):
+					if mPO[ndx2,ndx1] == 1:
+						for ndx3 in range(0,mPO.shape[0]):
+							if mPO[ndx1,ndx3] == 1:
+								mPO[ndx2,ndx3] = 0
+		reducedSumList.append(mPO)
+	return reducedSumList
+
+# Graph Partial Orders
+def GraphPO(reducedSumList,TSLabels):
+	graphNum = 0
+	for PO in reducedSumList:
+		graph = Digraph(comment = graphNum)
+		for value in range(0,PO.shape[0]):
+			if value%2 == 0:
+				label = ' min'
+			else:
+				label = ' max'
+			graph.node(str(value),TSLabels[value/2] + label)
+		for row in range(0,PO.shape[0]):
+			for col in range(0,PO.shape[0]):
+				if PO[row,col] == 1:
+					graph.edge(str(col),str(row))
+		graph.render('graph'+str(graphNum)+'.gv',view=True)
+		graphNum += 1
+
+# Print partial orders
+def PrintPO(reducedSumList,newTSLabels):
+	start = raw_input('To plot range of partial orders, enter starting epsilon step, else enter "x":\n')
+	if not(start=='x'):
+		end = input('Enter ending epsilon step:\n')
+		newSumList = []
+		for ndx in range(int(start),int(end+1)):
+			newSumList.append(reducedSumList[ndx])
+		GraphPO(newSumList,newTSLabels)
 
 # Parse RawData.tsv file output list of TS and list of TS labels
 def ParseFile(fileName):
@@ -276,86 +371,16 @@ def ParseFile(fileName):
 	f.close()
 	return TSData,TSLabels
 
-# Plot the percent of total order vs epsilon
-def PlotPercent(percentPOList,step):
-	epsList = []
-	for ndx in range(0,len(percentPOList)):
-		epsList.append(ndx*step)
-	plt.plot(epsList, percentPOList, 'ro')
-	plt.axis([0, 0.6, 0, 1])
-	plt.ylabel('percent of linear order')
-	plt.xlabel('epsilon')
-	plt.savefig('percentPlot.png')
-	f = Image.open("percentPlot.png").show()
-
-# Pick off a few time series, specifically TS 3,4,12,15,17,18
-def PickTS(TSList,chosenTS,TSLabels):
-	newTSList = []
-	newTSLabels = []
-	ndx = 0
-	for ts in TSList:
-		if ndx in chosenTS:
-			newTSList.append(TSList[ndx])
-			newTSLabels.append(TSLabels[ndx])
-		ndx += 1
-	return newTSList,newTSLabels
-
-# Convert each PO in POsumList into matrix
-def ConvertPO(POsumList):
-	matrixPOsumList = []
-	for PO in POsumList:
-		POmatrixList = []
-		for ndx in range(0,len(PO)):
-			POmatrixList.append([])
-			for ndx1 in range(0,len(PO)):
-				if ndx1 in PO[ndx]:
-					POmatrixList[ndx].append(1)
-				else:
-					POmatrixList[ndx].append(0)
-		matrixPOsumList.append(matrix(POmatrixList))
-	return matrixPOsumList
-
-# Reduce each PO matrix as much as posible. i.e. take transitivity into account
-# For graphing
-def ReducePOmatrix(matrixPOsumList):
-	reducedSumList = []
-	for PO in matrixPOsumList:
-		mPO = matrix(copy(PO))
-		colSum = sum(mPO)
-		for col in range(0,mPO.shape[1]):
-			if colSum[0,col] > 1:
-				for row in range(0,mPO.shape[0]):
-					if mPO[row,col] == 1:
-						for row2 in range(0,mPO.shape[0]):
-							if mPO[row2,row] == 1:
-								mPO[row2,col] = 0
-		reducedSumList.append(mPO)
-	return reducedSumList
-
-# Print Partial Orders
-def GraphPO(reducedSumList,TSLabels):
-	graphNum = 0
-	for PO in reducedSumList:
-		graph = Digraph(comment = graphNum)
-		for value in range(0,PO.shape[0]):
-			if value%2 == 0:
-				label = ' min'
-			else:
-				label = ' max'
-			graph.node(str(value),TSLabels[value/2] + label)
-		for row in range(0,PO.shape[0]):
-			for col in range(0,PO.shape[0]):
-				if PO[row,col] == 1:
-					graph.edge(str(col),str(row))
-		graph.render('graph'+str(graphNum)+'.gv',view=True)
-		graphNum += 1
-
-
 def main():
-	step = 0.05
-	chosenTS = [2,3,11,14,16,17]
-	param = 0
+	step = float(sys.argv[1])
+	if len(sys.argv) == 2:
+		param = 0
+	else:
+		param == sys.argv[2]
 
+	# To do: Put this into sys.argv inputs. need to parse string to get it into list
+	chosenTS = [2,3,11,14,16,17]
+	
 	TSList = ParseFile('RawData.tsv')[0]
 	TSLabels = ParseFile('RawData.tsv')[1]
 	newTSList,newTSLabels = PickTS(TSList,chosenTS,TSLabels)
@@ -368,13 +393,7 @@ def main():
 	reducedSumList = ReducePOmatrix(matrixPOsumList)
 
 	PlotPercent(percentPOList,step)
-	start = raw_input('To plot partial orders, enter starting epsilon, else enter x:\n')
-	if not(start=='x'):
-		end = input('Enter ending epsilon:\n')
-		newSumList = []
-		for ndx in range(int(start),int(end+1)):
-			newSumList.append(reducedSumList[ndx])
-		GraphPO(newSumList,TSLabels)
+	PrintPO(reducedSumList,newTSLabels)
 	
 
 main()
