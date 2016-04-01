@@ -5,43 +5,69 @@ from numpy import matrix,copy
 from graphviz import Digraph
 from PIL import Image
 
-# For a given time, check to see if epsilon nbhd of next time's value intersects
-# epsilon nbhd of current time's value and also intersects epsilon nbhd of each time value that is in the component.
-# If so, add to time's component list and check the next time, etc.
-# Inputs: t = time, ts = time series, epsilon, compList = list of components indexed by time
-def ForwardCheck(t,ts,epsilon,compList):
-	if t < len(ts)-1:
-		next = t+1
-		while (ts[next] + epsilon) >= (ts[t] - epsilon) and (ts[next] - epsilon) <= (ts[t] + epsilon):
-			var = 1
-			for time in compList[t]:
-				if not ((ts[next] + epsilon) >= (ts[time] - epsilon) and (ts[next] - epsilon) <= (ts[time] + epsilon)):
-					var = 0
-					return
-			if var:
-				compList[t].append(next)
-			if next == len(ts) - 1:
-				return
-			next += 1
+# Checks to see if the epsilon nbhd of value of t2 intersects the epsilon nbhd of value of t2
+def BoolIntersect(t1,t2,ts,epsilon):
+	if (ts[t2] + epsilon) >= (ts[t1] - epsilon) and (ts[t2] - epsilon) <= (ts[t1] + epsilon):
+		return True
 
-# For a given time, check to see if epsilon nbhd of prev time's value intersects
-# epsilon nbhd of current time's value and also intersects epsilon nbhd of each time value that is in the component. 
-# If so, add to time's component list and check the prev time, etc.
-# Inputs: t = time, ts = time series, epsilon, compList = list of components indexed by time
-def ReverseCheck(t,ts,epsilon,compList):
-	if t > 0:
-		prev = t-1
-		while (ts[prev] + epsilon) >= (ts[t] - epsilon) and (ts[prev] - epsilon) <= (ts[t] + epsilon):
-			var = 1
+# Grows epsilon components for a given time t
+def GrowComponent(t,ts,epsilon,compList):
+	index = 1
+	if t == 0:
+		while not(t+index > len(ts) - 1) and BoolIntersect(t,t+index,ts,epsilon):
 			for time in compList[t]:
-				if not ((ts[prev] + epsilon) >= (ts[time] - epsilon) and (ts[prev] - epsilon) <= (ts[time] + epsilon)):
-					var = 0
+				if not(BoolIntersect(t+index,time,ts,epsilon)):
 					return
-			if var:
-				compList[t].insert(0, prev)
-			if prev == 0:
+			compList[t].append(t+index)
+			index += 1
+	elif t == len(ts) - 1:
+		while not(t-index < 0) and BoolIntersect(t,t-index,ts,epsilon):
+			for time in compList[t]:
+				if not(BoolIntersect(t-index,time,ts,epsilon)):
+					return
+			compList[t].insert(0, t-index)
+			index += 1
+	elif not(BoolIntersect(t,t-index,ts,epsilon)) and BoolIntersect(t,t+index,ts,epsilon):
+		while not(t+index > len(ts) - 1) and BoolIntersect(t,t+index,ts,epsilon):
+			for time in compList[t]:
+				if not(BoolIntersect(t+index,time,ts,epsilon)):
+					return
+			compList[t].append(t+index)
+			index += 1
+	elif BoolIntersect(t,t-index,ts,epsilon) and not(BoolIntersect(t,t+index,ts,epsilon)):
+		while not(t-index < 0) and BoolIntersect(t,t-index,ts,epsilon):
+			for time in compList[t]:
+				if not(BoolIntersect(t-index,time,ts,epsilon)):
+					return
+			compList[t].insert(0, t-index)
+			index += 1
+	else:
+		while BoolIntersect(t,t-index,ts,epsilon) and BoolIntersect(t,t+index,ts,epsilon):
+			if BoolIntersect(t+index,t-index,ts,epsilon):
+				for time in compList[t]:
+					if not(BoolIntersect(t-index,time,ts,epsilon) and BoolIntersect(t+index,time,ts,epsilon)):
+						return
+				compList[t].append(t+index)
+				compList[t].insert(0, t-index)
+				if t+index == len(ts) - 1:
+					while not(t-index < 0) and BoolIntersect(t,t-index,ts,epsilon):
+						for time in compList[t]:
+							if not(BoolIntersect(t-index,time,ts,epsilon)):
+								return
+						compList[t].insert(0, t-index)
+						index += 1
+					return
+				if t-index == 0:
+					while not(t+index > len(ts) - 1) and BoolIntersect(t,t+index,ts,epsilon):
+						for time in compList[t]:
+							if not(BoolIntersect(t+index,time,ts,epsilon)):
+								return
+						compList[t].append(t+index)
+						index += 1
+					return
+				index += 1
+			else:
 				return
-			prev -= 1
 
 # For a given epsilon, build component list for each t
 # Inputs: ts = time series, epsilon
@@ -50,8 +76,7 @@ def BuildCompList(ts,epsilon):
 	compList = []
 	for t in range(0,len(ts)):
 		compList.append([t])
-		ForwardCheck(t,ts,epsilon,compList)
-		ReverseCheck(t,ts,epsilon,compList)
+		GrowComponent(t,ts,epsilon,compList)
 	return compList
 
 # Normalize time series and find global min/max
