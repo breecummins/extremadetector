@@ -1,4 +1,3 @@
-
 import sys
 import matplotlib.pyplot as plt
 from numpy import matrix,copy
@@ -10,7 +9,9 @@ def BoolIntersect(t1,t2,ts,epsilon):
 	if (ts[t2] + epsilon) >= (ts[t1] - epsilon) and (ts[t2] - epsilon) <= (ts[t1] + epsilon):
 		return True
 
-# Grows epsilon components for a given time t
+# Grows epsilon components for a given time t. It does this by simultaneiously checking both neighboring points,
+# if they exist, and only adding them if they intersect time t and all other times in the component, as well as
+# intersecting eachother.
 def GrowComponent(t,ts,epsilon,compList):
 	index = 1
 	if t == 0:
@@ -396,19 +397,26 @@ def ParseFile(fileName):
 	f.close()
 	return TSData,TSLabels
 
+# The arguments are filename, step, chosen ts ([] if you want all), parameter (default = 0)
 def main():
-	step = float(sys.argv[1])
-	if len(sys.argv) == 2:
+	filename = sys.argv[1]
+	step = float(sys.argv[2])
+	chosenTS = eval(sys.argv[3])
+	if len(sys.argv) == 4:
 		param = 0
 	else:
-		param == sys.argv[2]
+		param == sys.argv[4]
 
-	# To do: Put this into sys.argv inputs. need to parse string to get it into list
-	chosenTS = [2,3,11,14,16,17]
+	# chosenTS of interest is [2,3,11,14,16,17]
 	
 	TSList = ParseFile('RawData.tsv')[0]
 	TSLabels = ParseFile('RawData.tsv')[1]
-	newTSList,newTSLabels = PickTS(TSList,chosenTS,TSLabels)
+	if len(chosenTS) == 0:
+		newTSList = TSList
+		newTSLabels = TSLabels
+	else:
+		newTSList,newTSLabels = PickTS(TSList,chosenTS,TSLabels)
+
 	sumList = ProcessTS(newTSList,param,step)
 	maxEps = FindMaxEps(sumList)
 	minMaxCompList = PullMinMaxComps(sumList,maxEps,step)
