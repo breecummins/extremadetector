@@ -409,8 +409,8 @@ def main():
 
 	# chosenTS of interest is [2,3,11,14,16,17]
 	
-	TSList = ParseFile('RawData.tsv')[0]
-	TSLabels = ParseFile('RawData.tsv')[1]
+	TSList = ParseFile(filename)[0]
+	TSLabels = ParseFile(filename)[1]
 	if len(chosenTS) == 0:
 		newTSList = TSList
 		newTSLabels = TSLabels
