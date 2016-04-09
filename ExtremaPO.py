@@ -3,6 +3,8 @@ import matplotlib.pyplot as plt
 from numpy import matrix,copy
 from graphviz import Digraph
 from PIL import Image
+import intervalgraph as ig
+import json
 
 # Checks to see if the epsilon nbhd of value of t2 intersects the epsilon nbhd of value of t2
 def BoolIntersect(t1,t2,ts,epsilon):
@@ -243,8 +245,8 @@ def FindMaxEps(sumList):
 	epsilon = sumList[0][3]
 	for ts in sumList:
 		if ts[3] < epsilon:
-			eps = ts[3]
-	return eps
+			epsilon = ts[3]
+	return epsilon
 
 # For each ts, pull min/max components for each step up to eps indexed by ts then step
 # min component comes before max component
@@ -363,7 +365,7 @@ def GraphPO(reducedSumList,TSLabels):
 		for row in range(0,PO.shape[0]):
 			for col in range(0,PO.shape[0]):
 				if PO[row,col] == 1:
-					graph.edge(str(col),str(row))
+					graph.edge(str(row),str(col))
 		graph.render('graph'+str(graphNum)+'.gv',view=True)
 		graphNum += 1
 
@@ -397,6 +399,64 @@ def ParseFile(fileName):
 	f.close()
 	return TSData,TSLabels
 
+# Convert PO's to graph class
+def POToGraph(POsumList,TSLabels):
+	graphSumList = []
+	for PO in POsumList:
+		G = ig.Graph()
+		for value in range(0,len(PO)):
+			# if value%2 == 0:
+			# 	label = ' min'
+			# else:
+			# 	label = ' max'
+			G.add_vertex(value,TSLabels[value/2])
+		for i in range(0,len(PO)):
+			for j in PO[i]:
+				G.add_edge(i,j)
+		graphSumList.append(G.transitive_reduction())
+	return graphSumList
+
+# Convert graphs to digraphs
+def GraphToDigraph(graphSumList):
+	graphNum = 0
+	for G in graphSumList:
+		DG = Digraph(comment = graphNum)
+		for v in G.vertices():
+			DG.node(str(v),G.vertex_label(v))
+		for e in G.edges():
+			DG.edge(str(e[0]),str(e[1]))
+		DG.render('graph'+str(graphNum)+'new.gv',view=True)
+		graphNum += 1
+
+# Labeling function for the genes
+def CreateLabel(sumList):
+	d = len(sumList)
+	label = [0]*(2*d)
+	for ndx in range(0,d):
+		if sumList[ndx][1] < sumList[ndx][2]:   # deepest min occurs before deepest max
+			label[2*d - 1 - ndx] = 1
+			label[d - 1 - ndx] = 0
+		else:
+			label[2*d - 1 - ndx] = 0
+			label[d - 1 - ndx] = 1
+	label = str(label).strip('[]')
+	label = label.replace(', ','')
+	label = int(label,2)
+	return label
+
+# Create JSON string for each graph
+def ConvertToJSON(graphSumList,sumList,TSLabels):
+	ndx = 0
+	for G in graphSumList:
+		output = {}
+		output["poset"] = [ list(G.adjacencies(i)) for i in G.vertices() ]
+		output["events"] = [ TSLabels.index(G.vertex_label(i)) for i in G.vertices() ]
+		output["label"] = CreateLabel(sumList)
+		output["dimension"] = len(TSLabels)
+		with open('pattern' + str(ndx) + '.json', 'w') as fp:
+		  json.dump(output, fp)
+		ndx += 1
+
 # The arguments are filename, step, chosen ts ([] if you want all), parameter (default = 0)
 def main():
 	filename = sys.argv[1]
@@ -416,11 +476,15 @@ def main():
 		newTSLabels = TSLabels
 	else:
 		newTSList,newTSLabels = PickTS(TSList,chosenTS,TSLabels)
-
 	sumList = ProcessTS(newTSList,param,step)
+	# print(sumList)
 	maxEps = FindMaxEps(sumList)
 	minMaxCompList = PullMinMaxComps(sumList,maxEps,step)
 	POsumList = BuildPO(minMaxCompList,maxEps,step)
+	graphSumList = POToGraph(POsumList,newTSLabels)
+	ConvertToJSON(graphSumList,sumList,newTSLabels)
+	# GraphToDigraph(graphSumList)
+
 	percentPOList = ConvertPOsumList(POsumList)
 	matrixPOsumList = ConvertPO(POsumList)
 	reducedSumList = ReducePOmatrix(matrixPOsumList)
