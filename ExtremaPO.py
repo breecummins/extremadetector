@@ -506,14 +506,19 @@ def main():
 	POsumList = BuildPO(minMaxCompList,maxEps,step)
 	graphSumList = POToGraph(POsumList,newTSLabels)
 	ConvertToJSON(graphSumList,sumList,newTSLabels)
-	
+
+	## Prints the PO's from the conversion to S.H.'s graph class
 	# GraphToDigraph(graphSumList)
 
+	## Needed to plot things the old way
 	# percentPOList = ConvertPOsumList(POsumList)
 	# matrixPOsumList = ConvertPO(POsumList)
 	# reducedSumList = ReducePOmatrix(matrixPOsumList)
 
+	## Plots the graph of percentage of linear order
 	# PlotPercent(percentPOList,step)
+	
+	## Prints the PO's the original way
 	# PrintPO(reducedSumList,newTSLabels)
 	
 
