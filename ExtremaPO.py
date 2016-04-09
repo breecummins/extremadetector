@@ -17,28 +17,28 @@ def BoolIntersect(t1,t2,ts,epsilon):
 def GrowComponent(t,ts,epsilon,compList):
 	index = 1
 	if t == 0:
-		while not(t+index > len(ts) - 1) and BoolIntersect(t,t+index,ts,epsilon):
+		while not(t+index > len(ts) - 1):
 			for time in compList[t]:
 				if not(BoolIntersect(t+index,time,ts,epsilon)):
 					return
 			compList[t].append(t+index)
 			index += 1
 	elif t == len(ts) - 1:
-		while not(t-index < 0) and BoolIntersect(t,t-index,ts,epsilon):
+		while not(t-index < 0):
 			for time in compList[t]:
 				if not(BoolIntersect(t-index,time,ts,epsilon)):
 					return
 			compList[t].insert(0, t-index)
 			index += 1
 	elif not(BoolIntersect(t,t-index,ts,epsilon)) and BoolIntersect(t,t+index,ts,epsilon):
-		while not(t+index > len(ts) - 1) and BoolIntersect(t,t+index,ts,epsilon):
+		while not(t+index > len(ts) - 1):
 			for time in compList[t]:
 				if not(BoolIntersect(t+index,time,ts,epsilon)):
 					return
 			compList[t].append(t+index)
 			index += 1
 	elif BoolIntersect(t,t-index,ts,epsilon) and not(BoolIntersect(t,t+index,ts,epsilon)):
-		while not(t-index < 0) and BoolIntersect(t,t-index,ts,epsilon):
+		while not(t-index < 0):
 			for time in compList[t]:
 				if not(BoolIntersect(t-index,time,ts,epsilon)):
 					return
@@ -53,7 +53,8 @@ def GrowComponent(t,ts,epsilon,compList):
 				compList[t].append(t+index)
 				compList[t].insert(0, t-index)
 				if t+index == len(ts) - 1:
-					while not(t-index < 0) and BoolIntersect(t,t-index,ts,epsilon):
+					index += 1
+					while not(t-index < 0):
 						for time in compList[t]:
 							if not(BoolIntersect(t-index,time,ts,epsilon)):
 								return
@@ -61,7 +62,8 @@ def GrowComponent(t,ts,epsilon,compList):
 						index += 1
 					return
 				if t-index == 0:
-					while not(t+index > len(ts) - 1) and BoolIntersect(t,t+index,ts,epsilon):
+					index += 1
+					while not(t+index > len(ts) - 1):
 						for time in compList[t]:
 							if not(BoolIntersect(t+index,time,ts,epsilon)):
 								return
@@ -69,6 +71,22 @@ def GrowComponent(t,ts,epsilon,compList):
 						index += 1
 					return
 				index += 1
+				if not(BoolIntersect(t,t-index,ts,epsilon)) and BoolIntersect(t,t+index,ts,epsilon):
+					while not(t+index > len(ts) - 1):
+						for time in compList[t]:
+							if not(BoolIntersect(t+index,time,ts,epsilon)):
+								return
+						compList[t].append(t+index)
+						index += 1
+					return
+				if BoolIntersect(t,t-index,ts,epsilon) and not(BoolIntersect(t,t+index,ts,epsilon)):
+					while not(t-index < 0):
+						for time in compList[t]:
+							if not(BoolIntersect(t-index,time,ts,epsilon)):
+								return
+						compList[t].insert(0, t-index)
+						index += 1
+					return
 			else:
 				return
 
@@ -200,7 +218,7 @@ def EpsLife(labeledChains):
 	return minLife,maxLife
 
 # Extract deepest lifetime min and max
-def DeepLife(minLife,maxLife):
+def DeepLife(minLife,maxLife,ts):
 	value = 0
 	for t in range(0,len(minLife)):
 		if minLife[t] > value:
@@ -211,6 +229,12 @@ def DeepLife(minLife,maxLife):
 		if maxLife[t] > value:
 			deepMax = t
 			value = maxLife[t]
+	for t in range(0,len(minLife)):		# Check to ensure we get global min and max returned
+		if maxLife[t] == maxLife[deepMax] and (ts[t] > ts[deepMax]):
+			deepMax = t
+		if minLife[t] == minLife[deepMin] and (ts[t] < ts[deepMin]):
+			deepMin = t
+
 	return deepMin,deepMax
 
 # Given a min and max, find the maximum epsilon step where their components are disjoint
@@ -232,7 +256,7 @@ def ProcessTS(tsList, param, step):
 		chainList, labeledChains = BuildChains(eiList,ts,step)
 		minLife,maxLife = EpsLife(labeledChains)
 		if param == 0:
-			minTime,maxTime = DeepLife(minLife,maxLife)
+			minTime,maxTime = DeepLife(minLife,maxLife,ts)
 #		elif param == 1:
 #			minTime,maxTime = FirstLife(minLife,maxLife)
 		eps = FindEps(eiList,minTime,maxTime)
@@ -477,20 +501,20 @@ def main():
 	else:
 		newTSList,newTSLabels = PickTS(TSList,chosenTS,TSLabels)
 	sumList = ProcessTS(newTSList,param,step)
-	# print(sumList)
 	maxEps = FindMaxEps(sumList)
 	minMaxCompList = PullMinMaxComps(sumList,maxEps,step)
 	POsumList = BuildPO(minMaxCompList,maxEps,step)
 	graphSumList = POToGraph(POsumList,newTSLabels)
 	ConvertToJSON(graphSumList,sumList,newTSLabels)
+	
 	# GraphToDigraph(graphSumList)
 
-	percentPOList = ConvertPOsumList(POsumList)
-	matrixPOsumList = ConvertPO(POsumList)
-	reducedSumList = ReducePOmatrix(matrixPOsumList)
+	# percentPOList = ConvertPOsumList(POsumList)
+	# matrixPOsumList = ConvertPO(POsumList)
+	# reducedSumList = ReducePOmatrix(matrixPOsumList)
 
-	PlotPercent(percentPOList,step)
-	PrintPO(reducedSumList,newTSLabels)
+	# PlotPercent(percentPOList,step)
+	# PrintPO(reducedSumList,newTSLabels)
 	
 
 main()
