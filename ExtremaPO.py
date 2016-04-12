@@ -5,6 +5,7 @@ from graphviz import Digraph
 from PIL import Image
 import intervalgraph as ig
 import json
+import heapq
 
 # Checks to see if the epsilon nbhd of value of t2 intersects the epsilon nbhd of value of t2
 def BoolIntersect(t1,t2,ts,epsilon):
@@ -217,119 +218,100 @@ def EpsLife(labeledChains):
 				s+=1
 	return minLife,maxLife
 
-# Extract deepest lifetime min and max
-def DeepLife(minLife,maxLife,ts):
-	value = 0
-	for t in range(0,len(minLife)):
-		if minLife[t] > value:
-			deepMin = t
-			value = minLife[t]
-	value = 0
-	for t in range(0,len(maxLife)):
-		if maxLife[t] > value:
-			deepMax = t
-			value = maxLife[t]
-	for t in range(0,len(minLife)):		# Check to ensure we get global min and max returned
-		if maxLife[t] == maxLife[deepMax] and (ts[t] > ts[deepMax]):
-			deepMax = t
-		if minLife[t] == minLife[deepMin] and (ts[t] < ts[deepMin]):
-			deepMin = t
-
-	return deepMin,deepMax
+# Extract the n deepest lifetime mins and maxes. If there are ties, the sequentially first one is chosen
+# return list of 2n events, ordered by highest min, highest max, second highest min, ...
+def DeepLife(minLife,maxLife,ts,n):
+	minLifeCopy = list(minLife)
+	maxLifeCopy = list(maxLife)
+	deepEventList = []
+	for ndx in range(0,n):
+		minimum = max(minLifeCopy)
+		maximum = max(maxLifeCopy)
+		minIndex = minLifeCopy.index(minimum)
+		maxIndex = maxLifeCopy.index(maximum)
+		deepEventList.append(minIndex)
+		deepEventList.append(maxIndex)
+		minLifeCopy[minIndex] = 0
+		maxLifeCopy[maxIndex] = 0
+	return deepEventList
 
 # Given a min and max, find the maximum epsilon step where their components are disjoint
-def FindEps(eiList, minTime, maxTime):
-	for ndx in range(0,len(eiList)):
-		if len(set(eiList[ndx][minTime]).intersection(eiList[ndx][maxTime])) == 0:
-			eps = ndx
-	return eps
+def FindEps(eiList, deepEventList):
+	value = 0
+	epsilon = 0
+	maxEps = -1
+	while value == 0:
+		for ndx1 in range(0,len(deepEventList)):
+			for ndx2 in range(0,len(deepEventList)):
+				if len(set(eiList[epsilon][deepEventList[ndx1]]).intersection(eiList[epsilon][deepEventList[ndx2]])) != 0 and ndx1 != ndx2:
+					value = 1
+		if value == 0:
+			maxEps = epsilon
+		epsilon += 1
+	return maxEps
 
 # Process a list of time series and output a list of time series info. Each item in the list will correspond to time series
 # and will be a list of the form [eiList, minTime, maxTime, eps]
-# eiList = epsilon-indexed list of components, min/maxTime = time of chosen min/max, eps = highest step of epsilon at which
-# the min component and max component are disjoint
-# param specifies how the min/max are chosen: 0 = deepest, 1 = first (to be implemented)
-def ProcessTS(tsList, param, step):
+# eiList = epsilon-indexed list of components, deepMin/MaxList = list of times of first n mins/maxes
+# eps = highest step of epsilon at which the min component and max component are disjoint
+def ProcessTS(tsList, n, step):
 	sumList = []
 	for ts in tsList:
 		eiList = BuildEIList(ts,step)
 		chainList, labeledChains = BuildChains(eiList,ts,step)
 		minLife,maxLife = EpsLife(labeledChains)
-		if param == 0:
-			minTime,maxTime = DeepLife(minLife,maxLife,ts)
-#		elif param == 1:
-#			minTime,maxTime = FirstLife(minLife,maxLife)
-		eps = FindEps(eiList,minTime,maxTime)
-		sumList.append([eiList,minTime,maxTime,eps])
+		deepEventList = DeepLife(minLife,maxLife,ts,n)
+		eps = FindEps(eiList,deepEventList)
+		sumList.append([eiList,deepEventList,eps])
 	return sumList
 
 # Find the minimum value of eps such that min/max interval of every time series being processed
 # is disjoint. So take min of all eps
 def FindMaxEps(sumList):
-	epsilon = sumList[0][3]
+	epsilon = sumList[0][2]
 	for ts in sumList:
-		if ts[3] < epsilon:
-			epsilon = ts[3]
+		if ts[2] < epsilon:
+			epsilon = ts[2]
 	return epsilon
 
 # For each ts, pull min/max components for each step up to eps indexed by ts then step
-# min component comes before max component
-def PullMinMaxComps(sumList,maxEps,step):
-	minMaxCompList = []
+# then highest min, highest max, second highest min, ...
+def PullEventComps(sumList,maxEps,step,n):
+	eventCompList = []
 	ndx = 0
 	for tsList in sumList:
-		minMaxCompList.append([])
+		ndx1 = 0
+		eventCompList.append([])
 		for eps in range(0,maxEps+1):
-			minMaxCompList[ndx].append([tsList[0][eps][tsList[1]],tsList[0][eps][tsList[2]]])
+			eventCompList[ndx].append([])
+			for event in range(0,2*n):
+				eventCompList[ndx][ndx1].append(tsList[0][eps][tsList[1][event]])
+			ndx1 += 1
 		ndx += 1
-	return minMaxCompList
+	return eventCompList
 
-# Build partial order list indexed by epsilon. Each PO is a list indexed by 1st ts min, 1st ts max, ..., last ts min, last ts max
+# Build partial order list indexed by epsilon. Each PO is a list indexed by 1st ts highest min, 1st ts highest max, 
+# 1st ts second highest min, 1st ts second highst max, ..., last ts nth highest min, last ts nth highest max
 # Each entry is a list of all mins/maxes that occur before the given min/max. 
-def BuildPO(minMaxCompList,maxEps,step):
+def BuildPO(eventCompList,maxEps,step,n):
 	maxStep = maxEps
 	POsumList = []
 	for eps in range(0,maxStep+1):
 		PO = []
-		for ts in range(0,len(minMaxCompList)):
-			for exType in range(0,2):
+		for ts in range(0,len(eventCompList)):
+			for event in range(0,2*n):
 				PO.append([])
-				for ndx in range(0,len(minMaxCompList)):
-					for ndx1 in range(0,2):
-						fixed = minMaxCompList[ts][eps][exType]
-						checker = minMaxCompList[ndx][eps][ndx1]
+				for ndx in range(0,len(eventCompList)):
+					for ndx1 in range(0,2*n):
+						fixed = eventCompList[ts][eps][event]
+						checker = eventCompList[ndx][eps][ndx1]
 						intSize = len(set(fixed).intersection(checker))
 						if intSize == 0: #intSize < 2
 #							if (intSize == 1 and len(fixed) > 1 and len(checker) > 1) or intSize == 0:
 								if fixed[0] < checker[0]:
-									PO[2*ts + exType].append(2*ndx + ndx1)
+									PO[2*n*ts + event].append(2*n*ndx + ndx1)
 		POsumList.append(PO)
 	return POsumList
-
-# For each epsilon, for each PO in POsumList, sum number of inequalities in PO and divide by number in total order
-# So find how close it is to a linear order
-def ConvertPOsumList(POsumList):
-	n = len(POsumList[0])
-	countTO = (n*(n-1))/2.0
-	percentPOList = []
-	for PO in POsumList:
-		count = 0
-		for ndx in range(0,n):
-			count += len(PO[ndx])
-		percentPOList.append(round(count/countTO,4))
-	return percentPOList
-
-# Plot the percent of total order vs epsilon
-def PlotPercent(percentPOList,step):
-	epsList = []
-	for ndx in range(0,len(percentPOList)):
-		epsList.append(ndx*step)
-	plt.plot(epsList, percentPOList, 'ro')
-	plt.axis([0, 0.6, 0, 1])
-	plt.ylabel('percent of linear order')
-	plt.xlabel('epsilon')
-	plt.savefig('percentPlot.png')
-	f = Image.open("percentPlot.png").show()
 
 # Pick off a few time series if do not want to look at all of them
 def PickTS(TSList,chosenTS,TSLabels):
@@ -342,66 +324,6 @@ def PickTS(TSList,chosenTS,TSLabels):
 			newTSLabels.append(TSLabels[ndx])
 		ndx += 1
 	return newTSList,newTSLabels
-
-# Convert each PO in POsumList into adjacency matrix
-def ConvertPO(POsumList):
-	matrixPOsumList = []
-	for PO in POsumList:
-		POmatrixList = []
-		for ndx in range(0,len(PO)):
-			POmatrixList.append([])
-			for ndx1 in range(0,len(PO)):
-				if ndx1 in PO[ndx]:
-					POmatrixList[ndx].append(1)
-				else:
-					POmatrixList[ndx].append(0)
-		matrixPOsumList.append(matrix(POmatrixList))
-	return matrixPOsumList
-
-# Reduce each PO matrix as much as posible. i.e. transitive reduction
-# For graphing purposes
-def ReducePOmatrix(matrixPOsumList):
-	reducedSumList = []
-	for PO in matrixPOsumList:
-		mPO = matrix(copy(PO))
-		colSum = sum(mPO)
-		for ndx1 in range(0,mPO.shape[0]):
-			if colSum[0,ndx1] > 1:
-				for ndx2 in range(0,mPO.shape[0]):
-					if mPO[ndx2,ndx1] == 1:
-						for ndx3 in range(0,mPO.shape[0]):
-							if mPO[ndx1,ndx3] == 1:
-								mPO[ndx2,ndx3] = 0
-		reducedSumList.append(mPO)
-	return reducedSumList
-
-# Graph Partial Orders
-def GraphPO(reducedSumList,TSLabels):
-	graphNum = 0
-	for PO in reducedSumList:
-		graph = Digraph(comment = graphNum)
-		for value in range(0,PO.shape[0]):
-			if value%2 == 0:
-				label = ' min'
-			else:
-				label = ' max'
-			graph.node(str(value),TSLabels[value/2] + label)
-		for row in range(0,PO.shape[0]):
-			for col in range(0,PO.shape[0]):
-				if PO[row,col] == 1:
-					graph.edge(str(row),str(col))
-		graph.render('graph'+str(graphNum)+'.gv',view=True)
-		graphNum += 1
-
-# Print partial orders
-def PrintPO(reducedSumList,newTSLabels):
-	start = raw_input('To plot range of partial orders, enter starting epsilon step, else enter "x":\n')
-	if not(start=='x'):
-		end = input('Enter ending epsilon step:\n')
-		newSumList = []
-		for ndx in range(int(start),int(end+1)):
-			newSumList.append(reducedSumList[ndx])
-		GraphPO(newSumList,newTSLabels)
 
 # Parse RawData.tsv file output list of TS and list of TS labels
 def ParseFile(fileName):
@@ -424,7 +346,7 @@ def ParseFile(fileName):
 	return TSData,TSLabels
 
 # Convert PO's to graph class
-def POToGraph(POsumList,TSLabels):
+def POToGraph(POsumList,TSLabels,n):
 	graphSumList = []
 	for PO in POsumList:
 		G = ig.Graph()
@@ -433,7 +355,7 @@ def POToGraph(POsumList,TSLabels):
 			# 	label = ' min'
 			# else:
 			# 	label = ' max'
-			G.add_vertex(value,TSLabels[value/2])
+			G.add_vertex(value,TSLabels[value/(2*n)])
 		for i in range(0,len(PO)):
 			for j in PO[i]:
 				G.add_edge(i,j)
@@ -457,7 +379,9 @@ def CreateLabel(sumList):
 	d = len(sumList)
 	label = [0]*(2*d)
 	for ndx in range(0,d):
-		if sumList[ndx][1] < sumList[ndx][2]:   # deepest min occurs before deepest max
+		lastEvent = max(sumList[ndx][1])
+		indexOfLE = sumList[ndx][1].index(lastEvent)
+		if indexOfLE%2 == 0:   # last event was min, since ordered min,max,min,max,...
 			label[2*d - 1 - ndx] = 1
 			label[d - 1 - ndx] = 0
 		else:
@@ -481,15 +405,12 @@ def ConvertToJSON(graphSumList,sumList,TSLabels):
 		  json.dump(output, fp)
 		ndx += 1
 
-# The arguments are filename, step, chosen ts ([] if you want all), parameter (default = 0)
+# The arguments are filename, step, chosen ts ([] if you want all), n = number of mins/maxes to pull
 def main():
 	filename = sys.argv[1]
 	step = float(sys.argv[2])
 	chosenTS = eval(sys.argv[3])
-	if len(sys.argv) == 4:
-		param = 0
-	else:
-		param == sys.argv[4]
+	n = int(sys.argv[4])
 
 	# chosenTS of interest is [2,3,11,14,16,17]
 	
@@ -500,26 +421,14 @@ def main():
 		newTSLabels = TSLabels
 	else:
 		newTSList,newTSLabels = PickTS(TSList,chosenTS,TSLabels)
-	sumList = ProcessTS(newTSList,param,step)
+	sumList = ProcessTS(newTSList,n,step)
 	maxEps = FindMaxEps(sumList)
-	minMaxCompList = PullMinMaxComps(sumList,maxEps,step)
-	POsumList = BuildPO(minMaxCompList,maxEps,step)
-	graphSumList = POToGraph(POsumList,newTSLabels)
+	eventCompList = PullEventComps(sumList,maxEps,step,n)
+	POsumList = BuildPO(eventCompList,maxEps,step,n)
+	graphSumList = POToGraph(POsumList,newTSLabels,n)
 	ConvertToJSON(graphSumList,sumList,newTSLabels)
 
-	## Prints the PO's from the conversion to S.H.'s graph class
-	# GraphToDigraph(graphSumList)
-
-	## Needed to plot things the old way
-	# percentPOList = ConvertPOsumList(POsumList)
-	# matrixPOsumList = ConvertPO(POsumList)
-	# reducedSumList = ReducePOmatrix(matrixPOsumList)
-
-	## Plots the graph of percentage of linear order
-	# PlotPercent(percentPOList,step)
+	# Prints the PO's from the conversion to S.H.'s graph class
+	GraphToDigraph(graphSumList)
 	
-	## Prints the PO's the original way
-	# PrintPO(reducedSumList,newTSLabels)
-	
-
 main()
