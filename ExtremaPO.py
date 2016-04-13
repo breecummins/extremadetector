@@ -331,7 +331,7 @@ def CreateLabel(sumList):
 	for ndx in range(0,d):
 		lastEvent = max(sumList[ndx][1])
 		indexOfLE = sumList[ndx][1].index(lastEvent)
-		if indexOfLE%2 == 0:   # last event was min, since ordered min,max,min,max,...
+		if indexOfLE%2 == 1:   # last event was min, since ordered min,max,min,max,...
 			label[2*d - 1 - ndx] = 1
 			label[d - 1 - ndx] = 0
 		else:
@@ -398,6 +398,7 @@ def ParseNetworkFile(fileName):
 	f.close()
 	return chosenTSList
 
+# Pull the data corresponding to those TS returned by ParseNetworkFile
 def PickNetworkTS(TSList,TSLabels,chosenTS):
 	newTSList = []
 	for ts in chosenTS:
@@ -406,17 +407,17 @@ def PickNetworkTS(TSList,TSLabels,chosenTS):
 	return newTSList
 
 
-# The arguments are dataFileName, networkFileName, filetype = 'row' or 'col',
-# chosen ts ([] if you want all), n = number of mins/maxes to pull, step (default to 0.01)
+# The arguments are dataFileName, fileType = 'row' or 'col', networkFileName,
+# n = number of mins/maxes to pull, step (default to 0.01)
 def main():
 	dataFileName = sys.argv[1]
-	networkFileName = sys.argv[2]
-	fileType = sys.argv[3]
-	n = int(sys.argv[5])
-	if len(sys.argv) == 6:
+	fileType = sys.argv[2]
+	networkFileName = sys.argv[3]
+	n = int(sys.argv[4])
+	if len(sys.argv) == 5:
 		step = 0.01
 	else:
-		step = float(sys.argv[6])
+		step = float(sys.argv[5])
 
 	if fileType == 'col':
 		TSList = ParseColFile(dataFileName)[0]
@@ -434,7 +435,7 @@ def main():
 	graph = POToGraph(PO,newTSLabels,n)
 	ConvertToJSON(graph,sumList,newTSLabels)
 
-	# Prints the PO's from the conversion to S.H.'s graph class
-	GraphToDigraph(graph)
+	# # Prints the PO's from the conversion to S.H.'s graph class
+	# GraphToDigraph(graph)
 	
 main()
