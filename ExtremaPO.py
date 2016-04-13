@@ -325,8 +325,8 @@ def PickTS(TSList,chosenTS,TSLabels):
 		ndx += 1
 	return newTSList,newTSLabels
 
-# Parse RawData.tsv file output list of TS and list of TS labels
-def ParseFile(fileName):
+# Parse file where genes are in columns output list of TS and list of TS labels 
+def ParseColFile(fileName):
 	f = open(fileName)
 	TSData = []
 	for ndx in range(0,43):
@@ -345,16 +345,14 @@ def ParseFile(fileName):
 	f.close()
 	return TSData,TSLabels
 
+# Parse file with genes in row format
+
 # Convert PO's to graph class
 def POToGraph(POsumList,TSLabels,n):
 	graphSumList = []
 	for PO in POsumList:
 		G = ig.Graph()
 		for value in range(0,len(PO)):
-			# if value%2 == 0:
-			# 	label = ' min'
-			# else:
-			# 	label = ' max'
 			G.add_vertex(value,TSLabels[value/(2*n)])
 		for i in range(0,len(PO)):
 			for j in PO[i]:
@@ -387,8 +385,7 @@ def CreateLabel(sumList):
 		else:
 			label[2*d - 1 - ndx] = 0
 			label[d - 1 - ndx] = 1
-	label = str(label).strip('[]')
-	label = label.replace(', ','')
+	label = '0b' + ''.join([str(x) for x in label])	#Cast to binary
 	label = int(label,2)
 	return label
 
@@ -405,17 +402,24 @@ def ConvertToJSON(graphSumList,sumList,TSLabels):
 		  json.dump(output, fp)
 		ndx += 1
 
-# The arguments are filename, step, chosen ts ([] if you want all), n = number of mins/maxes to pull
+# The arguments are filename, filetype = 'row' or 'col',
+# chosen ts ([] if you want all), n = number of mins/maxes to pull, step (default to 0.01)
 def main():
 	filename = sys.argv[1]
-	step = float(sys.argv[2])
+	fileType = sys.argv[2]
+	print(fileType)
+	sys.exit()
 	chosenTS = eval(sys.argv[3])
 	n = int(sys.argv[4])
+	if len(sys.argv) == 4:
+		step = 0.01
+	else:
+		step = float(sys.argv[5])
 
 	# chosenTS of interest is [2,3,11,14,16,17]
 	
-	TSList = ParseFile(filename)[0]
-	TSLabels = ParseFile(filename)[1]
+	TSList = ParseColFile(filename)[0]
+	TSLabels = ParseColFile(filename)[1]
 	if len(chosenTS) == 0:
 		newTSList = TSList
 		newTSLabels = TSLabels
