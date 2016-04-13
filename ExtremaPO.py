@@ -396,8 +396,14 @@ def ParseNetworkFile(fileName):
 	for line in f:
 		chosenTSList.append(line.split()[0])
 	f.close()
-	print chosenTSList
 	return chosenTSList
+
+def PickNetworkTS(TSList,TSLabels,chosenTS):
+	newTSList = []
+	for ts in chosenTS:
+		tsIndex = TSLabels.index(ts)
+		newTSList.append(TSList[tsIndex])
+	return newTSList
 
 
 # The arguments are dataFileName, networkFileName, filetype = 'row' or 'col',
@@ -419,8 +425,8 @@ def main():
 		TSList = ParseRowFile(dataFileName)[0]
 		TSLabels = ParseRowFile(dataFileName)[1]
 
-	chosenTS = ParseNetworkFile(networkFileName)
-	newTSList,newTSLabels = PickTS(TSList,chosenTS,TSLabels)
+	newTSLabels = ParseNetworkFile(networkFileName)
+	newTSList = PickNetworkTS(TSList,TSLabels,newTSLabels)
 	sumList = ProcessTS(newTSList,n,step)
 	maxEps = FindMaxEps(sumList)
 	eventCompList = PullEventComps(sumList,maxEps,step,n)
