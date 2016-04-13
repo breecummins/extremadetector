@@ -357,6 +357,7 @@ def ParseColFile(fileName):
 	f = open(fileName)
 	TSData = []
 	TSLabels = []
+	timeStepList = []
 
 	value = 0 												# indicates if line of gene labels has been reached
 	for line in f:
@@ -369,25 +370,27 @@ def ParseColFile(fileName):
 			else:
 				for ndx in range(0,len(line.split()) - 1):
 					TSData[ndx].append(float(line.split()[ndx+1]))
+					timeStepList.append(float(line.split()[0]))
 	f.close()
-	return TSData,TSLabels
+	return TSData,TSLabels,timeStepList
 
 # Parse file with genes in row format
 def ParseRowFile(fileName):
 	f = open(fileName)
-	TSData = []
+	TSList = []
 	TSLabels = []
 
 	value = 0 											# indicates if time_points line has been reached
 	for line in f:
 		if line.split()[0] != '#':
 			if value == 0:
+				timeStepList = [float(time) for time in line.split()[1:]]
 				value = 1
 			else:
-				TSData.append([float(item) for item in line.split()[1:]])
+				TSList.append([float(item) for item in line.split()[1:]])
 				TSLabels.append(line.split()[0])
 	f.close()
-	return TSData,TSLabels
+	return TSList,TSLabels, timeStepList
 
 # Parse network file to know which time series to pick off
 def ParseNetworkFile(fileName):
@@ -406,28 +409,43 @@ def PickNetworkTS(TSList,TSLabels,chosenTS):
 		newTSList.append(TSList[tsIndex])
 	return newTSList
 
+# Truncate timeseries. Keep all data before timeCutOff
+def TruncateTS(newTSList,timeStepList,timeCutOff):
+	indexOfCutOff = timeStepList.index(timeCutOff)
+	truncatedTSList = []
+	for ts in newTSList:
+		truncatedTSList.append(ts[:(indexOfCutOff+1)])
+	print(truncatedTSList)
+	return truncatedTSList
 
 # The arguments are dataFileName, fileType = 'row' or 'col', networkFileName,
-# n = number of mins/maxes to pull, step (default to 0.01)
+# n = number of mins/maxes to pull, timeCutOff = ignore data after this time ( = -1 if no cutOff), step (default to 0.01)
 def main():
 	dataFileName = sys.argv[1]
 	fileType = sys.argv[2]
 	networkFileName = sys.argv[3]
 	n = int(sys.argv[4])
-	if len(sys.argv) == 5:
+	timeCutOff = float(sys.argv[5])
+	if len(sys.argv) == 6:
 		step = 0.01
 	else:
-		step = float(sys.argv[5])
+		step = float(sys.argv[6])
 
 	if fileType == 'col':
 		TSList = ParseColFile(dataFileName)[0]
 		TSLabels = ParseColFile(dataFileName)[1]
+		timeStepList = ParseColFile(dataFileName)[2]
 	elif fileType == 'row':
 		TSList = ParseRowFile(dataFileName)[0]
 		TSLabels = ParseRowFile(dataFileName)[1]
+		timeStepList = ParseRowFile(dataFileName)[2]
 
 	newTSLabels = ParseNetworkFile(networkFileName)
 	newTSList = PickNetworkTS(TSList,TSLabels,newTSLabels)
+
+	if timeCutOff != float(-1):
+		newTSList = TruncateTS(newTSList,timeStepList,timeCutOff)
+
 	sumList = ProcessTS(newTSList,n,step)
 	maxEps = FindMaxEps(sumList)
 	eventCompList = PullEventComps(sumList,maxEps,step,n)
@@ -435,7 +453,7 @@ def main():
 	graph = POToGraph(PO,newTSLabels,n)
 	ConvertToJSON(graph,sumList,newTSLabels)
 
-	# # Prints the PO's from the conversion to S.H.'s graph class
-	# GraphToDigraph(graph)
+	# Prints the PO's from the conversion to S.H.'s graph class
+	GraphToDigraph(graph)
 	
 main()
