@@ -389,41 +389,38 @@ def ParseRowFile(fileName):
 	f.close()
 	return TSData,TSLabels
 
-# Pick off a few time series if do not want to look at all of them
-def PickTS(TSList,chosenTS,TSLabels):
-	newTSList = []
-	newTSLabels = []
-	ndx = 0
-	for ts in TSList:
-		if ndx in chosenTS:
-			newTSList.append(TSList[ndx])
-			newTSLabels.append(TSLabels[ndx])
-		ndx += 1
-	return newTSList,newTSLabels
+# Parse network file to know which time series to pick off
+def ParseNetworkFile(fileName):
+	f = open(fileName)
+	chosenTSList = []
+	for line in f:
+		chosenTSList.append(line.split()[0])
+	f.close()
+	print chosenTSList
+	return chosenTSList
 
-# The arguments are filename, filetype = 'row' or 'col',
+
+# The arguments are dataFileName, networkFileName, filetype = 'row' or 'col',
 # chosen ts ([] if you want all), n = number of mins/maxes to pull, step (default to 0.01)
 def main():
-	filename = sys.argv[1]
-	fileType = sys.argv[2]
-	chosenTS = eval(sys.argv[3])
-	n = int(sys.argv[4])
-	if len(sys.argv) == 5:
+	dataFileName = sys.argv[1]
+	networkFileName = sys.argv[2]
+	fileType = sys.argv[3]
+	n = int(sys.argv[5])
+	if len(sys.argv) == 6:
 		step = 0.01
 	else:
-		step = float(sys.argv[5])
+		step = float(sys.argv[6])
 
 	if fileType == 'col':
-		TSList = ParseColFile(filename)[0]
-		TSLabels = ParseColFile(filename)[1]
+		TSList = ParseColFile(dataFileName)[0]
+		TSLabels = ParseColFile(dataFileName)[1]
 	elif fileType == 'row':
-		TSList = ParseRowFile(filename)[0]
-		TSLabels = ParseRowFile(filename)[1]
-	if len(chosenTS) == 0:
-		newTSList = TSList
-		newTSLabels = TSLabels
-	else:
-		newTSList,newTSLabels = PickTS(TSList,chosenTS,TSLabels)
+		TSList = ParseRowFile(dataFileName)[0]
+		TSLabels = ParseRowFile(dataFileName)[1]
+
+	chosenTS = ParseNetworkFile(networkFileName)
+	newTSList,newTSLabels = PickTS(TSList,chosenTS,TSLabels)
 	sumList = ProcessTS(newTSList,n,step)
 	maxEps = FindMaxEps(sumList)
 	eventCompList = PullEventComps(sumList,maxEps,step,n)
