@@ -274,19 +274,15 @@ def FindMaxEps(sumList):
 			epsilon = ts[2]
 	return epsilon
 
-# For each ts, pull min/max components for each step up to eps indexed by ts then step
+# For each ts, pull min/max components for each step up to eps indexed by ts
 # then highest min, highest max, second highest min, ...
 def PullEventComps(sumList,maxEps,step,n):
 	eventCompList = []
 	ndx = 0
 	for tsList in sumList:
-		ndx1 = 0
 		eventCompList.append([])
-		for eps in range(0,maxEps+1):
-			eventCompList[ndx].append([])
-			for event in range(0,2*n):
-				eventCompList[ndx][ndx1].append(tsList[0][eps][tsList[1][event]])
-			ndx1 += 1
+		for event in range(0,2*n):
+			eventCompList[ndx].append(tsList[0][maxEps][tsList[1][event]])
 		ndx += 1
 	return eventCompList
 
@@ -294,24 +290,19 @@ def PullEventComps(sumList,maxEps,step,n):
 # 1st ts second highest min, 1st ts second highst max, ..., last ts nth highest min, last ts nth highest max
 # Each entry is a list of all mins/maxes that occur before the given min/max. 
 def BuildPO(eventCompList,maxEps,step,n):
-	maxStep = maxEps
-	POsumList = []
-	for eps in range(0,maxStep+1):
-		PO = []
-		for ts in range(0,len(eventCompList)):
-			for event in range(0,2*n):
-				PO.append([])
-				for ndx in range(0,len(eventCompList)):
-					for ndx1 in range(0,2*n):
-						fixed = eventCompList[ts][eps][event]
-						checker = eventCompList[ndx][eps][ndx1]
-						intSize = len(set(fixed).intersection(checker))
-						if intSize == 0: #intSize < 2
-#							if (intSize == 1 and len(fixed) > 1 and len(checker) > 1) or intSize == 0:
-								if fixed[0] < checker[0]:
-									PO[2*n*ts + event].append(2*n*ndx + ndx1)
-		POsumList.append(PO)
-	return POsumList
+	PO = []
+	for ts in range(0,len(eventCompList)):
+		for event in range(0,2*n):
+			PO.append([])
+			for ndx in range(0,len(eventCompList)):
+				for ndx1 in range(0,2*n):
+					fixed = eventCompList[ts][event]
+					checker = eventCompList[ndx][ndx1]
+					intSize = len(set(fixed).intersection(checker))
+					if intSize == 0:
+						if fixed[0] < checker[0]:
+							PO[2*n*ts + event].append(2*n*ndx + ndx1)
+	return PO
 
 # Pick off a few time series if do not want to look at all of them
 def PickTS(TSList,chosenTS,TSLabels):
@@ -348,29 +339,24 @@ def ParseColFile(fileName):
 # Parse file with genes in row format
 
 # Convert PO's to graph class
-def POToGraph(POsumList,TSLabels,n):
-	graphSumList = []
-	for PO in POsumList:
-		G = ig.Graph()
-		for value in range(0,len(PO)):
-			G.add_vertex(value,TSLabels[value/(2*n)])
-		for i in range(0,len(PO)):
-			for j in PO[i]:
-				G.add_edge(i,j)
-		graphSumList.append(G.transitive_reduction())
-	return graphSumList
+def POToGraph(PO,TSLabels,n):
+	G = ig.Graph()
+	for value in range(0,len(PO)):
+		G.add_vertex(value,TSLabels[value/(2*n)])
+	for i in range(0,len(PO)):
+		for j in PO[i]:
+			G.add_edge(i,j)
+	G = G.transitive_reduction()
+	return G
 
 # Convert graphs to digraphs
-def GraphToDigraph(graphSumList):
-	graphNum = 0
-	for G in graphSumList:
-		DG = Digraph(comment = graphNum)
-		for v in G.vertices():
-			DG.node(str(v),G.vertex_label(v))
-		for e in G.edges():
-			DG.edge(str(e[0]),str(e[1]))
-		DG.render('graph'+str(graphNum)+'new.gv',view=True)
-		graphNum += 1
+def GraphToDigraph(G):
+	DG = Digraph(comment = 'PO')
+	for v in G.vertices():
+		DG.node(str(v),G.vertex_label(v))
+	for e in G.edges():
+		DG.edge(str(e[0]),str(e[1]))
+	DG.render('graph.gv',view=True)
 
 # Labeling function for the genes
 def CreateLabel(sumList):
@@ -390,36 +376,35 @@ def CreateLabel(sumList):
 	return label
 
 # Create JSON string for each graph
-def ConvertToJSON(graphSumList,sumList,TSLabels):
-	ndx = 0
-	for G in graphSumList:
-		output = {}
-		output["poset"] = [ list(G.adjacencies(i)) for i in G.vertices() ]
-		output["events"] = [ TSLabels.index(G.vertex_label(i)) for i in G.vertices() ]
-		output["label"] = CreateLabel(sumList)
-		output["dimension"] = len(TSLabels)
-		with open('pattern' + str(ndx) + '.json', 'w') as fp:
-		  json.dump(output, fp)
-		ndx += 1
+def ConvertToJSON(graph,sumList,TSLabels):
+	G = graph
+	output = {}
+	output["poset"] = [ list(G.adjacencies(i)) for i in G.vertices() ]
+	output["events"] = [ TSLabels.index(G.vertex_label(i)) for i in G.vertices() ]
+	output["label"] = CreateLabel(sumList)
+	output["dimension"] = len(TSLabels)
+	with open('pattern.json', 'w') as fp:
+	  json.dump(output, fp)
 
 # The arguments are filename, filetype = 'row' or 'col',
 # chosen ts ([] if you want all), n = number of mins/maxes to pull, step (default to 0.01)
 def main():
 	filename = sys.argv[1]
 	fileType = sys.argv[2]
-	print(fileType)
-	sys.exit()
 	chosenTS = eval(sys.argv[3])
 	n = int(sys.argv[4])
-	if len(sys.argv) == 4:
+	if len(sys.argv) == 5:
 		step = 0.01
 	else:
 		step = float(sys.argv[5])
 
-	# chosenTS of interest is [2,3,11,14,16,17]
-	
-	TSList = ParseColFile(filename)[0]
-	TSLabels = ParseColFile(filename)[1]
+	if fileType == 'col':
+		TSList = ParseColFile(filename)[0]
+		TSLabels = ParseColFile(filename)[1]
+	elif fileType == 'row':
+		TSList = ParseRowFile(filename)[0]
+		TSLabels = ParseRowFile(filename)[1]
+
 	if len(chosenTS) == 0:
 		newTSList = TSList
 		newTSLabels = TSLabels
@@ -428,11 +413,11 @@ def main():
 	sumList = ProcessTS(newTSList,n,step)
 	maxEps = FindMaxEps(sumList)
 	eventCompList = PullEventComps(sumList,maxEps,step,n)
-	POsumList = BuildPO(eventCompList,maxEps,step,n)
-	graphSumList = POToGraph(POsumList,newTSLabels,n)
-	ConvertToJSON(graphSumList,sumList,newTSLabels)
+	PO = BuildPO(eventCompList,maxEps,step,n)
+	graph = POToGraph(PO,newTSLabels,n)
+	ConvertToJSON(graph,sumList,newTSLabels)
 
-	# # Prints the PO's from the conversion to S.H.'s graph class
-	# GraphToDigraph(graphSumList)
+	# Prints the PO's from the conversion to S.H.'s graph class
+	GraphToDigraph(graph)
 	
 main()
