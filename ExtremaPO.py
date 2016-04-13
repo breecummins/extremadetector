@@ -316,28 +316,6 @@ def PickTS(TSList,chosenTS,TSLabels):
 		ndx += 1
 	return newTSList,newTSLabels
 
-# Parse file where genes are in columns output list of TS and list of TS labels 
-def ParseColFile(fileName):
-	f = open(fileName)
-	TSData = []
-	for ndx in range(0,43):
-		TSData.append([])
-	lineNDX = 0
-	TSLabels = []
-	for line in f:
-		lineList = line.split()
-		if lineNDX == 5:
-			for ndx in range(0,len(lineList)-1):
-				TSLabels.append(lineList[ndx+1])
-		elif lineNDX >= 6:
-			for ndx in range(0,len(lineList)-1):
-				TSData[ndx].append(float(lineList[ndx+1]))
-		lineNDX += 1
-	f.close()
-	return TSData,TSLabels
-
-# Parse file with genes in row format
-
 # Convert PO's to graph class
 def POToGraph(PO,TSLabels,n):
 	G = ig.Graph()
@@ -385,6 +363,46 @@ def ConvertToJSON(graph,sumList,TSLabels):
 	output["dimension"] = len(TSLabels)
 	with open('pattern.json', 'w') as fp:
 	  json.dump(output, fp)
+
+# Parse file where genes are in columns output list of TS and list of TS labels 
+def ParseColFile(fileName):
+	f = open(fileName)
+	TSData = []
+	TSLabels = []
+
+	value = 0 												# indicates if line of gene labels has been reached
+	for line in f:
+		if line.split()[0] != '#':
+			if value == 0:
+				value = 1
+				for ndx in range(0,len(line.split()) - 1):
+					TSData.append([])
+					TSLabels.append(line.split()[ndx+1])
+			else:
+				for ndx in range(0,len(line.split()) - 1):
+					TSData[ndx].append(float(line.split()[ndx+1]))
+	f.close()
+	return TSData,TSLabels
+
+
+	# for ndx in range(0,43):
+	# 	TSData.append([])
+	# lineNDX = 0
+	# TSLabels = []
+	# for line in f:
+	# 	lineList = line.split()
+	# 	if lineNDX == 5:
+	# 		for ndx in range(0,len(lineList)-1):
+	# 			TSLabels.append(lineList[ndx+1])
+	# 	elif lineNDX >= 6:
+	# 		for ndx in range(0,len(lineList)-1):
+	# 			TSData[ndx].append(float(lineList[ndx+1]))
+	# 	lineNDX += 1
+	# f.close()
+	# return TSData,TSLabels
+
+# # Parse file with genes in row format
+# def ParseRowFile(fileName):
 
 # The arguments are filename, filetype = 'row' or 'col',
 # chosen ts ([] if you want all), n = number of mins/maxes to pull, step (default to 0.01)
