@@ -419,17 +419,19 @@ def TruncateTS(newTSList,timeStepList,timeCutOff):
 	return truncatedTSList
 
 # The arguments are dataFileName, fileType = 'row' or 'col', networkFileName,
-# n = number of mins/maxes to pull, timeCutOff = ignore data after this time ( = -1 if no cutOff), step (default to 0.01)
+# n = number of mins/maxes to pull, timeCutOff = ignore data after this time ( = -1 if no cutOff), 
+# scaleEps = a scaling factor of maxEps (Must be in (0,1]), step (default to 0.01)
 def main():
 	dataFileName = sys.argv[1]
 	fileType = sys.argv[2]
 	networkFileName = sys.argv[3]
 	n = int(sys.argv[4])
 	timeCutOff = float(sys.argv[5])
-	if len(sys.argv) == 6:
+	scalingFactor = float(sys.argv[6])
+	if len(sys.argv) == 7:
 		step = 0.01
 	else:
-		step = float(sys.argv[6])
+		step = float(sys.argv[7])
 
 	if fileType == 'col':
 		TSList = ParseColFile(dataFileName)[0]
@@ -448,7 +450,10 @@ def main():
 
 	sumList = ProcessTS(newTSList,n,step)
 	maxEps = FindMaxEps(sumList)
+	if scalingFactor > 0 and scalingFactor <= 1:
+		maxEps = int(scalingFactor*maxEps)
 	eventCompList = PullEventComps(sumList,maxEps,step,n)
+	print(eventCompList)
 	PO = BuildPO(eventCompList,maxEps,step,n)
 	graph = POToGraph(PO,newTSLabels,n)
 	ConvertToJSON(graph,sumList,newTSLabels)
