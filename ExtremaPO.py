@@ -304,18 +304,6 @@ def BuildPO(eventCompList,maxEps,step,n):
 							PO[2*n*ts + event].append(2*n*ndx + ndx1)
 	return PO
 
-# Pick off a few time series if do not want to look at all of them
-def PickTS(TSList,chosenTS,TSLabels):
-	newTSList = []
-	newTSLabels = []
-	ndx = 0
-	for ts in TSList:
-		if ndx in chosenTS:
-			newTSList.append(TSList[ndx])
-			newTSLabels.append(TSLabels[ndx])
-		ndx += 1
-	return newTSList,newTSLabels
-
 # Convert PO's to graph class
 def POToGraph(PO,TSLabels,n):
 	G = ig.Graph()
@@ -384,25 +372,34 @@ def ParseColFile(fileName):
 	f.close()
 	return TSData,TSLabels
 
+# Parse file with genes in row format
+def ParseRowFile(fileName):
+	f = open(fileName)
+	TSData = []
+	TSLabels = []
 
-	# for ndx in range(0,43):
-	# 	TSData.append([])
-	# lineNDX = 0
-	# TSLabels = []
-	# for line in f:
-	# 	lineList = line.split()
-	# 	if lineNDX == 5:
-	# 		for ndx in range(0,len(lineList)-1):
-	# 			TSLabels.append(lineList[ndx+1])
-	# 	elif lineNDX >= 6:
-	# 		for ndx in range(0,len(lineList)-1):
-	# 			TSData[ndx].append(float(lineList[ndx+1]))
-	# 	lineNDX += 1
-	# f.close()
-	# return TSData,TSLabels
+	value = 0 											# indicates if time_points line has been reached
+	for line in f:
+		if line.split()[0] != '#':
+			if value == 0:
+				value = 1
+			else:
+				TSData.append([float(item) for item in line.split()[1:]])
+				TSLabels.append(line.split()[0])
+	f.close()
+	return TSData,TSLabels
 
-# # Parse file with genes in row format
-# def ParseRowFile(fileName):
+# Pick off a few time series if do not want to look at all of them
+def PickTS(TSList,chosenTS,TSLabels):
+	newTSList = []
+	newTSLabels = []
+	ndx = 0
+	for ts in TSList:
+		if ndx in chosenTS:
+			newTSList.append(TSList[ndx])
+			newTSLabels.append(TSLabels[ndx])
+		ndx += 1
+	return newTSList,newTSLabels
 
 # The arguments are filename, filetype = 'row' or 'col',
 # chosen ts ([] if you want all), n = number of mins/maxes to pull, step (default to 0.01)
@@ -422,7 +419,6 @@ def main():
 	elif fileType == 'row':
 		TSList = ParseRowFile(filename)[0]
 		TSLabels = ParseRowFile(filename)[1]
-
 	if len(chosenTS) == 0:
 		newTSList = TSList
 		newTSLabels = TSLabels
