@@ -450,10 +450,9 @@ def main():
 
 	sumList = ProcessTS(newTSList,n,step)
 	maxEps = FindMaxEps(sumList)
-	if scalingFactor > 0 and scalingFactor <= 1:
+	if scalingFactor > 0 and scalingFactor < 1:
 		maxEps = int(scalingFactor*maxEps)
 	eventCompList = PullEventComps(sumList,maxEps,step,n)
-	print(eventCompList)
 	PO = BuildPO(eventCompList,maxEps,step,n)
 	graph = POToGraph(PO,newTSLabels,n)
 	ConvertToJSON(graph,sumList,newTSLabels)
