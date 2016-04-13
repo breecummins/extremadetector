@@ -453,7 +453,7 @@ def main():
 	graph = POToGraph(PO,newTSLabels,n)
 	ConvertToJSON(graph,sumList,newTSLabels)
 
-	# Prints the PO's from the conversion to S.H.'s graph class
-	GraphToDigraph(graph)
+	# # Prints the PO's from the conversion to S.H.'s graph class
+	# GraphToDigraph(graph)
 	
 main()
