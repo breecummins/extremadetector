@@ -2,7 +2,6 @@ import sys
 import matplotlib.pyplot as plt
 from numpy import matrix,copy
 from graphviz import Digraph
-from PIL import Image
 import intervalgraph as ig
 import json
 import heapq
@@ -349,8 +348,9 @@ def ConvertToJSON(graph,sumList,TSLabels):
 	output["events"] = [ TSLabels.index(G.vertex_label(i)) for i in G.vertices() ]
 	output["label"] = CreateLabel(sumList)
 	output["dimension"] = len(TSLabels)
-	with open('pattern.json', 'w') as fp:
-	  json.dump(output, fp)
+	# with open('pattern.json', 'w') as fp:
+	#   json.dump(output, fp)
+	return json.dumps(output)
 
 # Parse file where genes are in columns output list of TS and list of TS labels 
 def ParseColFile(fileName):
@@ -420,27 +420,12 @@ def TruncateTS(newTSList,timeStepList,timeCutOff):
 
 # The arguments are dataFileName, fileType = 'row' or 'col', networkFileName,
 # n = number of mins/maxes to pull, timeCutOff = ignore data after this time ( = -1 if no cutOff), 
-# scaleEps = a scaling factor of maxEps (Must be in (0,1]), step (default to 0.01)
-def main():
-	dataFileName = sys.argv[1]
-	fileType = sys.argv[2]
-	networkFileName = sys.argv[3]
-	n = int(sys.argv[4])
-	timeCutOff = float(sys.argv[5])
-	scalingFactor = float(sys.argv[6])
-	if len(sys.argv) == 7:
-		step = 0.01
-	else:
-		step = float(sys.argv[7])
-
+# scalingFactor = a scaling factor of maxEps (Must be in (0,1]), step (default to 0.01)
+def makeJSONstring(dataFileName,fileType,networkFileName,timeCutOff=-1,n=1,scalingFactor=1,step=0.01):
 	if fileType == 'col':
-		TSList = ParseColFile(dataFileName)[0]
-		TSLabels = ParseColFile(dataFileName)[1]
-		timeStepList = ParseColFile(dataFileName)[2]
+		TSList,TSLabels,timeStepList = ParseColFile(dataFileName)
 	elif fileType == 'row':
-		TSList = ParseRowFile(dataFileName)[0]
-		TSLabels = ParseRowFile(dataFileName)[1]
-		timeStepList = ParseRowFile(dataFileName)[2]
+		TSList,TSLabels,timeStepList = ParseRowFile(dataFileName)
 
 	newTSLabels = ParseNetworkFile(networkFileName)
 	newTSList = PickNetworkTS(TSList,TSLabels,newTSLabels)
@@ -455,9 +440,9 @@ def main():
 	eventCompList = PullEventComps(sumList,maxEps,step,n)
 	PO = BuildPO(eventCompList,maxEps,step,n)
 	graph = POToGraph(PO,newTSLabels,n)
-	ConvertToJSON(graph,sumList,newTSLabels)
+	return ConvertToJSON(graph,sumList,newTSLabels)
 
+if __name__ == "__main__":	
 	# # Prints the PO's from the conversion to S.H.'s graph class
 	# GraphToDigraph(graph)
-	
-main()
+	pass
